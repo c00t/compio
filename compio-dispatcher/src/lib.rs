@@ -12,7 +12,7 @@ use std::{
 };
 
 use compio_driver::{AsyncifyPool, DispatchError, Dispatchable, ProactorBuilder};
-use compio_runtime::{event::Event, JoinHandle as CompioJoinHandle, Runtime};
+use compio_runtime::{event::Event, registry::{SharedRegistryBuilder, ThreadRuntimeRef}, JoinHandle as CompioJoinHandle, Runtime};
 use flume::{unbounded, Sender};
 use futures_channel::oneshot;
 
@@ -122,9 +122,72 @@ impl Dispatcher {
         })
     }
 
+    /// Create the dispatcher with specified number of threads. But with collections of [``]
+    pub(crate) fn new_impl_runtime_refs(mut builder: DispatcherBuilder, runtime_refs_builder: SharedRegistryBuilder) -> io::Result<Self> {
+        let mut proactor_builder = builder.proactor_builder;
+        proactor_builder.force_reuse_thread_pool();
+        let pool = proactor_builder.create_or_get_thread_pool();
+        let (sender, receiver) = unbounded::<Spawning>();
+        // a cond var to wait for all threads be registered
+        let barrier = Arc::new(std::sync::Barrier::new(builder.nthreads+1));
+        let threads = (0..builder.nthreads)
+            .map({
+                |index| {
+                    let proactor_builder = proactor_builder.clone();
+                    let receiver = receiver.clone();
+
+                    let thread_builder = std::thread::Builder::new();
+                    let thread_builder = if let Some(s) = builder.stack_size {
+                        thread_builder.stack_size(s)
+                    } else {
+                        thread_builder
+                    };
+                    let thread_builder = if let Some(f) = &mut builder.names {
+                        thread_builder.name(f(index))
+                    } else {
+                        thread_builder
+                    };
+                    let mut runtime_refs_builder = runtime_refs_builder.clone();
+                    let barrier = barrier.clone();
+                    thread_builder.spawn(move || {
+                        let runtime = Runtime::builder()
+                            .with_proactor(proactor_builder)
+                            .build()
+                            .expect("cannot create compio runtime");
+                        runtime_refs_builder.register(ThreadRuntimeRef(&runtime));
+                        drop(runtime_refs_builder);
+                        barrier.wait();
+                        drop(barrier);
+                        runtime.block_on(async move {
+                                while let Ok(f) = receiver.recv_async().await {
+                                    let task = Runtime::with_current(|rt| f.spawn(rt));
+                                    if builder.concurrent {
+                                        task.detach()
+                                    } else {
+                                        task.await.ok();
+                                    }
+                                }
+                            });
+                    })
+                }
+            })
+            .collect::<io::Result<Vec<_>>>()?;
+        barrier.wait();
+        Ok(Self {
+            sender,
+            threads,
+            pool,
+        })
+    }
+
     /// Create the dispatcher with default config.
     pub fn new() -> io::Result<Self> {
         Self::builder().build()
+    }
+
+    /// Create the dispatcher with default config.
+    pub fn new_runtime_refs(runtime_refs_builder: SharedRegistryBuilder) -> io::Result<Self> {
+        Self::builder().build_runtime_refs(runtime_refs_builder)
     }
 
     /// Create a builder to build a dispatcher.
@@ -275,6 +338,11 @@ impl DispatcherBuilder {
     /// Build the [`Dispatcher`].
     pub fn build(self) -> io::Result<Dispatcher> {
         Dispatcher::new_impl(self)
+    }
+
+    /// Build the [`Dispatcher`].
+    pub fn build_runtime_refs(self, runtime_refs_builder: SharedRegistryBuilder) -> io::Result<Dispatcher> {
+        Dispatcher::new_impl_runtime_refs(self, runtime_refs_builder)
     }
 }
 

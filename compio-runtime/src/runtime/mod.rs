@@ -13,6 +13,7 @@ use std::{
 };
 
 use async_task::{Runnable, Task};
+use once_cell::sync::OnceCell;
 use compio_buf::IntoInner;
 use compio_driver::{
     op::Asyncify, AsRawFd, Key, OpCode, Proactor, ProactorBuilder, PushEntry, RawFd,
@@ -20,7 +21,10 @@ use compio_driver::{
 use compio_log::{debug, instrument};
 use crossbeam_queue::SegQueue;
 use futures_util::{future::Either, FutureExt};
+use registry::SharedRegistry;
 use smallvec::SmallVec;
+
+pub mod registry;
 
 pub(crate) mod op;
 #[cfg(feature = "time")]
@@ -35,9 +39,45 @@ use crate::{runtime::op::OpFlagsFuture, BufResult};
 
 scoped_tls::scoped_thread_local!(static CURRENT_RUNTIME: Runtime);
 
+/// An global runtime registry which set by
+static GLOBAL_SHARED_REGISTRY: OnceCell<Arc<SharedRegistry>> = OnceCell::new();
+
+/// Set the global runtime registry
+pub fn set_global_registry(registry: Arc<SharedRegistry>) {
+    if let Err(x) = GLOBAL_SHARED_REGISTRY.set(registry) {
+        panic!("set_global_registry called failed");
+    }
+}
+
+/// Get the global runtime registry
+pub fn get_global_registry() -> Arc<SharedRegistry> {
+    GLOBAL_SHARED_REGISTRY.get().unwrap().clone()
+}
+
 /// Type alias for `Task<Result<T, Box<dyn Any + Send>>>`, which resolves to an
 /// `Err` when the spawned future panicked.
 pub type JoinHandle<T> = Task<Result<T, Box<dyn Any + Send>>>;
+
+/// A thread id represent system-wide thread id
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
+pub struct ThreadId(u64);
+
+thread_local! {
+    /// A threaq local [`ThreadId`] that can be used to identify the current thread
+    static THREAD_ID: OnceCell<ThreadId> = OnceCell::new();
+}
+
+impl ThreadId {
+    /// Get the current thread id
+    pub fn current() -> Self {
+        THREAD_ID.with(|id| {
+            *id.get_or_init(|| 
+                ThreadId(gettid::gettid())
+            )
+        })
+    }
+}
+
 
 /// The async runtime of compio. It is a thread local runtime, and cannot be
 /// sent to other threads.
@@ -95,10 +135,22 @@ impl Runtime {
             panic!("not in a compio runtime")
         }
 
+        /// Try to find the runtime from the global registry
+        #[cold]
+        fn find_runtime() -> Option<&'static Runtime> {
+            get_global_registry().get_current()
+        }
+
         if CURRENT_RUNTIME.is_set() {
             CURRENT_RUNTIME.with(f)
         } else {
-            not_in_compio_runtime()
+            if let Some(runtime) = find_runtime() {
+                runtime.enter(|| {
+                    CURRENT_RUNTIME.with(f)
+                })
+            } else {
+                not_in_compio_runtime()
+            }
         }
     }
 
