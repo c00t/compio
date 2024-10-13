@@ -38,7 +38,7 @@ compio-log = { path = "./compio-log", version = "0.1.0" }
 compio-tls = { path = "./compio-tls", version = "0.3.0", default-features = false }
 compio-process = { path = "./compio-process", version = "0.2.0" }
 compio-quic = { path = "./compio-quic", version = "0.1.0" }
-bubble-core = { git = "https://github.com/c00t/Bubble.git", rev = "0ae0e522b9324187966daa8b6293a3b788df8ecb" }
+bubble-core = { git = "https://github.com/c00t/Bubble.git" }
 
 bytes = "1.7.1"
 flume = "0.11.0"
