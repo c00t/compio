@@ -33,7 +33,7 @@ use send_wrapper::SendWrapper;
 use crate::runtime::time::{TimerFuture, TimerRuntime};
 use crate::{BufResult, runtime::op::OpFlagsFuture};
 
-scoped_tls::scoped_thread_local!(static CURRENT_RUNTIME: Runtime);
+bubble_core::scoped_thread_local!(static CURRENT_RUNTIME: Runtime);
 
 /// Type alias for `Task<Result<T, Box<dyn Any + Send>>>`, which resolves to an
 /// `Err` when the spawned future panicked.

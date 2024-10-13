@@ -32,6 +32,7 @@ targets = [
 compio-driver = { workspace = true }
 compio-buf = { workspace = true }
 compio-log = { workspace = true }
+bubble-core = { workspace = true }
 
 async-task = "4.5.0"
 cfg-if = { workspace = true, optional = true }
@@ -39,7 +40,6 @@ criterion = { workspace = true, optional = true }
 crossbeam-queue = { workspace = true }
 futures-util = { workspace = true }
 once_cell = { workspace = true }
-scoped-tls = "1.0.1"
 slab = { workspace = true, optional = true }
 smallvec = "1.11.1"
 socket2 = { workspace = true }

@@ -1,10 +1,10 @@
 unstable_features = true
 
-style_edition = "2024"
+edition = "2024"
 
 group_imports = "StdExternalCrate"
 imports_granularity = "Crate"
-reorder_imports = true
+reorder_imports = false
 
 wrap_comments = true
 normalize_comments = true

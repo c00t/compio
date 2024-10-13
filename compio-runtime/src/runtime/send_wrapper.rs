@@ -13,7 +13,7 @@ use std::{
     thread::{self, ThreadId},
 };
 
-thread_local! {
+bubble_core::thread_local! {
     static THREAD_ID: Cell<ThreadId> = Cell::new(thread::current().id());
 }
 
@@ -54,7 +54,11 @@ impl<T> SendWrapper<T> {
     /// Returns a reference to the contained value, if valid.
     #[inline]
     pub fn get(&self) -> Option<&T> {
-        if self.valid() { Some(&self.data) } else { None }
+        if self.valid() {
+            Some(&self.data)
+        } else {
+            None
+        }
     }
 }
 

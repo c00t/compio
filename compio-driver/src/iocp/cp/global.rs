@@ -44,7 +44,11 @@ impl AsRawHandle for GlobalPort {
     }
 }
 
-static IOCP_PORT: OnceLock<GlobalPort> = OnceLock::new();
+bubble_core::lazy_static! {
+    static ref IOCP_PORT: OnceLock<GlobalPort> = OnceLock::new();
+}
+
+// static IOCP_PORT: OnceLock<GlobalPort> = OnceLock::new();
 
 #[inline]
 fn iocp_port() -> io::Result<&'static GlobalPort> {
@@ -90,7 +94,11 @@ fn iocp_start() -> io::Result<()> {
     Ok(())
 }
 
-static IOCP_INIT_ONCE: OnceLock<()> = OnceLock::new();
+bubble_core::lazy_static! {
+    static ref IOCP_INIT_ONCE: OnceLock<()> = OnceLock::new();
+}
+
+// static IOCP_INIT_ONCE: OnceLock<()> = OnceLock::new();
 
 pub struct Port {
     port: CompletionPort,

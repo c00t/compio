@@ -98,7 +98,11 @@ impl<W: Write, B: IoBuf> IntoInner for StdWrite<W, B> {
     }
 }
 
-static STDIN_ISATTY: OnceLock<bool> = OnceLock::new();
+bubble_core::lazy_static! {
+    static ref STDIN_ISATTY: OnceLock<bool> = OnceLock::new();
+}
+
+// static STDIN_ISATTY: OnceLock<bool> = OnceLock::new();
 
 /// A handle to the standard input stream of a process.
 ///
@@ -142,7 +146,11 @@ impl AsRawFd for Stdin {
     }
 }
 
-static STDOUT_ISATTY: OnceLock<bool> = OnceLock::new();
+bubble_core::lazy_static! {
+    static ref STDOUT_ISATTY: OnceLock<bool> = OnceLock::new();
+}
+
+// static STDOUT_ISATTY: OnceLock<bool> = OnceLock::new();
 
 /// A handle to the standard output stream of a process.
 ///
@@ -193,7 +201,11 @@ impl AsRawFd for Stdout {
     }
 }
 
-static STDERR_ISATTY: OnceLock<bool> = OnceLock::new();
+bubble_core::lazy_static! {
+    static ref STDERR_ISATTY: OnceLock<bool> = OnceLock::new();
+}
+
+// static STDERR_ISATTY: OnceLock<bool> = OnceLock::new();
 
 /// A handle to the standard output stream of a process.
 ///

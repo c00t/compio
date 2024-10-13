@@ -112,9 +112,9 @@ fn get_wsa_fn<F>(handle: RawFd, fguid: GUID) -> io::Result<Option<F>> {
 }
 
 impl<
-    D: std::marker::Send + 'static,
-    F: (FnOnce() -> BufResult<usize, D>) + std::marker::Send + std::marker::Sync + 'static,
-> OpCode for Asyncify<F, D>
+        D: std::marker::Send + 'static,
+        F: (FnOnce() -> BufResult<usize, D>) + std::marker::Send + std::marker::Sync + 'static,
+    > OpCode for Asyncify<F, D>
 {
     fn op_type(&self) -> OpType {
         OpType::Blocking
@@ -231,8 +231,13 @@ impl OpCode for CloseSocket {
     }
 }
 
-static ACCEPT_EX: OnceLock<LPFN_ACCEPTEX> = OnceLock::new();
-static GET_ADDRS: OnceLock<LPFN_GETACCEPTEXSOCKADDRS> = OnceLock::new();
+bubble_core::lazy_static! {
+    static ref ACCEPT_EX: OnceLock<LPFN_ACCEPTEX> = OnceLock::new();
+    static ref GET_ADDRS: OnceLock<LPFN_GETACCEPTEXSOCKADDRS> = OnceLock::new();
+}
+
+// static ACCEPT_EX: OnceLock<LPFN_ACCEPTEX> = OnceLock::new();
+// static GET_ADDRS: OnceLock<LPFN_GETACCEPTEXSOCKADDRS> = OnceLock::new();
 
 const ACCEPT_ADDR_BUFFER_SIZE: usize = std::mem::size_of::<SOCKADDR_STORAGE>() + 16;
 const ACCEPT_BUFFER_SIZE: usize = ACCEPT_ADDR_BUFFER_SIZE * 2;
@@ -332,7 +337,11 @@ impl<S: AsRawFd> OpCode for Accept<S> {
     }
 }
 
-static CONNECT_EX: OnceLock<LPFN_CONNECTEX> = OnceLock::new();
+bubble_core::lazy_static! {
+    static ref CONNECT_EX: OnceLock<LPFN_CONNECTEX> = OnceLock::new();
+}
+
+// static CONNECT_EX: OnceLock<LPFN_CONNECTEX> = OnceLock::new();
 
 impl<S: AsRawFd> Connect<S> {
     /// Update connect context.
@@ -777,7 +786,11 @@ impl<T: IoVectoredBuf, S: AsRawFd> OpCode for SendToVectored<T, S> {
     }
 }
 
-static WSA_RECVMSG: OnceLock<LPFN_WSARECVMSG> = OnceLock::new();
+bubble_core::lazy_static! {
+    static ref WSA_RECVMSG: OnceLock<LPFN_WSARECVMSG> = OnceLock::new();
+}
+
+// static WSA_RECVMSG: OnceLock<LPFN_WSARECVMSG> = OnceLock::new();
 
 /// Receive data and source address with ancillary data into vectored buffer.
 pub struct RecvMsg<T: IoVectoredBufMut, C: IoBufMut, S> {

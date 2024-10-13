@@ -21,8 +21,12 @@ use windows_sys::Win32::{
     },
 };
 
-static HANDLER: LazyLock<Mutex<HashMap<u32, Slab<EventHandle>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+bubble_core::lazy_static! {
+    static ref HANDLER: LazyLock<Mutex<HashMap<u32, Slab<EventHandle>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+}
+
+// static HANDLER: LazyLock<Mutex<HashMap<u32, Slab<EventHandle>>>> =
+// LazyLock::new(|| Mutex::new(HashMap::new()));
 
 unsafe extern "system" fn ctrl_event_handler(ctrltype: u32) -> BOOL {
     let mut handler = HANDLER.lock().unwrap();
@@ -38,7 +42,11 @@ unsafe extern "system" fn ctrl_event_handler(ctrltype: u32) -> BOOL {
     0
 }
 
-static INIT: OnceLock<()> = OnceLock::new();
+bubble_core::lazy_static! {
+    static ref INIT: OnceLock<()> = OnceLock::new();
+}
+
+// static INIT: OnceLock<()> = OnceLock::new();
 
 fn init() -> io::Result<()> {
     syscall!(BOOL, SetConsoleCtrlHandler(Some(ctrl_event_handler), 1))?;
