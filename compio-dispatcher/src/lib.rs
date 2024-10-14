@@ -96,8 +96,16 @@ impl Dispatcher {
                         thread_builder
                     };
 
+                    let (thread_name, thread_builder) = if let Some(f) = &mut builder.names {
+                        let name = f(index);
+                        (Some(name.clone()), thread_builder.name(name))
+                    } else {
+                        (None,thread_builder)
+                    };
+
                     thread_builder.spawn(move || {
                         Runtime::builder()
+                            .name(thread_name)
                             .with_proactor(proactor_builder)
                             .build()
                             .expect("cannot create compio runtime")

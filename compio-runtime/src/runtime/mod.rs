@@ -42,6 +42,7 @@ pub type JoinHandle<T> = Task<Result<T, Box<dyn Any + Send>>>;
 /// The async runtime of compio. It is a thread local runtime, and cannot be
 /// sent to other threads.
 pub struct Runtime {
+    name: String,
     driver: RefCell<Proactor>,
     local_runnables: Arc<SendWrapper<RefCell<VecDeque<Runnable>>>>,
     sync_runnables: Arc<SegQueue<Runnable>>,
@@ -66,6 +67,7 @@ impl Runtime {
 
     fn with_builder(builder: &RuntimeBuilder) -> io::Result<Self> {
         Ok(Self {
+            name: builder.name.clone(),
             driver: RefCell::new(builder.proactor_builder.build()?),
             local_runnables: Arc::new(SendWrapper::new(RefCell::new(VecDeque::new()))),
             sync_runnables: Arc::new(SegQueue::new()),
@@ -108,6 +110,20 @@ impl Runtime {
     /// current scope.
     pub fn enter<T, F: FnOnce() -> T>(&self, f: F) -> T {
         CURRENT_RUNTIME.set(self, f)
+    }
+
+    /// Get current runtime's name
+    pub fn name() -> String {
+        #[cold]
+        fn not_in_compio_runtime() -> ! {
+            panic!("not in a compio runtime")
+        }
+
+        if CURRENT_RUNTIME.is_set() {
+            CURRENT_RUNTIME.with(|rt| rt.name.clone())
+        } else {
+            not_in_compio_runtime()
+        }
     }
 
     /// Spawns a new asynchronous task, returning a [`Task`] for it.
@@ -384,6 +400,7 @@ impl criterion::async_executor::AsyncExecutor for &Runtime {
 pub struct RuntimeBuilder {
     proactor_builder: ProactorBuilder,
     event_interval: usize,
+    name: String,
 }
 
 impl Default for RuntimeBuilder {
@@ -398,6 +415,7 @@ impl RuntimeBuilder {
         Self {
             proactor_builder: ProactorBuilder::new(),
             event_interval: 61,
+            name: "compio".to_string(),
         }
     }
 
@@ -413,6 +431,14 @@ impl RuntimeBuilder {
     /// A scheduler “tick” roughly corresponds to one poll invocation on a task.
     pub fn event_interval(&mut self, val: usize) -> &mut Self {
         self.event_interval = val;
+        self
+    }
+
+    /// Set the name of the runtime.
+    pub fn name(&mut self, name: Option<String>) -> &mut Self {
+        if let Some(name) = name {
+            self.name = name;
+        }
         self
     }
 
