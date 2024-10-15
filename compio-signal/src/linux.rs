@@ -7,7 +7,7 @@ use std::{
 use compio_buf::{BufResult, IntoInner, IoBuf, IoBufMut, SetBufInit};
 use compio_driver::{OwnedFd, SharedFd, op::Recv, syscall};
 
-bubble_core::thread_local! {
+dyntls::thread_local! {
     static REG_MAP: RefCell<HashMap<i32, usize>> = RefCell::new(HashMap::new());
 }
 

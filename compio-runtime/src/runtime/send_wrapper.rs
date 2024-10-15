@@ -13,7 +13,7 @@ use std::{
     thread::{self, ThreadId},
 };
 
-bubble_core::thread_local! {
+dyntls::thread_local! {
     static THREAD_ID: Cell<ThreadId> = Cell::new(thread::current().id());
 }
 

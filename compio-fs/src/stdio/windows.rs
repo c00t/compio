@@ -98,7 +98,7 @@ impl<W: Write, B: IoBuf> IntoInner for StdWrite<W, B> {
     }
 }
 
-bubble_core::lazy_static! {
+dyntls::lazy_static! {
     static ref STDIN_ISATTY: OnceLock<bool> = OnceLock::new();
 }
 
@@ -146,7 +146,7 @@ impl AsRawFd for Stdin {
     }
 }
 
-bubble_core::lazy_static! {
+dyntls::lazy_static! {
     static ref STDOUT_ISATTY: OnceLock<bool> = OnceLock::new();
 }
 
@@ -201,7 +201,7 @@ impl AsRawFd for Stdout {
     }
 }
 
-bubble_core::lazy_static! {
+dyntls::lazy_static! {
     static ref STDERR_ISATTY: OnceLock<bool> = OnceLock::new();
 }
 

@@ -20,7 +20,7 @@ compio-buf = { workspace = true }
 compio-driver = { workspace = true }
 compio-io = { workspace = true }
 compio-runtime = { workspace = true }
-bubble-core = { workspace = true }
+dyntls = { workspace = true }
 
 cfg-if = { workspace = true }
 

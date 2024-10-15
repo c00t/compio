@@ -17,7 +17,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dependencies]
 # Workspace dependencies
 compio-runtime = { workspace = true, features = ["event"] }
-bubble-core = { workspace = true }
+dyntls = { workspace = true }
 
 # Windows specific dependencies
 [target.'cfg(windows)'.dependencies]

@@ -21,7 +21,7 @@ use windows_sys::Win32::{
     },
 };
 
-bubble_core::lazy_static! {
+dyntls::lazy_static! {
     static ref HANDLER: LazyLock<Mutex<HashMap<u32, Slab<EventHandle>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 }
 
@@ -42,7 +42,7 @@ unsafe extern "system" fn ctrl_event_handler(ctrltype: u32) -> BOOL {
     0
 }
 
-bubble_core::lazy_static! {
+dyntls::lazy_static! {
     static ref INIT: OnceLock<()> = OnceLock::new();
 }
 

@@ -38,7 +38,7 @@ compio-log = { path = "./compio-log", version = "0.1.0" }
 compio-tls = { path = "./compio-tls", version = "0.3.0", default-features = false }
 compio-process = { path = "./compio-process", version = "0.2.0" }
 compio-quic = { path = "./compio-quic", version = "0.1.0" }
-bubble-core = { path = "../../../app/bubble_core" }
+dyntls = { path = "../../../app/dyntls" }
 
 bytes = "1.7.1"
 flume = "0.11.0"
@@ -65,7 +65,7 @@ widestring = "1.0.2"
 windows-sys = "0.52.0"
 
 [workspace.dev-dependencies]
-bubble-core = { path = "../../../app/bubble_core", features = ["host"] }
+dyntls = { path = "../../../app/dyntls", features = ["host"] }
 
 [profile.bench]
 debug = true

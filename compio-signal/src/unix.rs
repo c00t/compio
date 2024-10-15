@@ -15,7 +15,7 @@ use once_cell::sync::Lazy as LazyLock;
 use os_pipe::{PipeReader, PipeWriter};
 use slab::Slab;
 
-bubble_core::lazy_static! {
+dyntls::lazy_static! {
     static ref HANDLER: LazyLock<Mutex<HashMap<i32, Slab<EventHandle>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
     static ref PIPE: LazyLock<Pipe> = LazyLock::new(|| Pipe::new().unwrap());
 }

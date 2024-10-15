@@ -5,7 +5,7 @@ const IO_URING: u8 = 0;
 const POLLING: u8 = 1;
 const IOCP: u8 = 2;
 
-bubble_core::lazy_static! {
+dyntls::lazy_static! {
     static ref DRIVER_TYPE: AtomicU8 = AtomicU8::new(UNINIT);
 }
 

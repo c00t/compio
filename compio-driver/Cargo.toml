@@ -31,7 +31,7 @@ targets = [
 # Workspace dependencies
 compio-buf = { workspace = true }
 compio-log = { workspace = true }
-bubble-core = { workspace = true }
+dyntls = { workspace = true }
 
 # Utils
 cfg-if = { workspace = true }

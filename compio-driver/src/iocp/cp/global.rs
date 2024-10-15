@@ -44,7 +44,7 @@ impl AsRawHandle for GlobalPort {
     }
 }
 
-bubble_core::lazy_static! {
+dyntls::lazy_static! {
     static ref IOCP_PORT: OnceLock<GlobalPort> = OnceLock::new();
 }
 
@@ -94,7 +94,7 @@ fn iocp_start() -> io::Result<()> {
     Ok(())
 }
 
-bubble_core::lazy_static! {
+dyntls::lazy_static! {
     static ref IOCP_INIT_ONCE: OnceLock<()> = OnceLock::new();
 }
 

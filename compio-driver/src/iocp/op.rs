@@ -231,7 +231,7 @@ impl OpCode for CloseSocket {
     }
 }
 
-bubble_core::lazy_static! {
+dyntls::lazy_static! {
     static ref ACCEPT_EX: OnceLock<LPFN_ACCEPTEX> = OnceLock::new();
     static ref GET_ADDRS: OnceLock<LPFN_GETACCEPTEXSOCKADDRS> = OnceLock::new();
 }
@@ -337,7 +337,7 @@ impl<S: AsRawFd> OpCode for Accept<S> {
     }
 }
 
-bubble_core::lazy_static! {
+dyntls::lazy_static! {
     static ref CONNECT_EX: OnceLock<LPFN_CONNECTEX> = OnceLock::new();
 }
 
@@ -786,7 +786,7 @@ impl<T: IoVectoredBuf, S: AsRawFd> OpCode for SendToVectored<T, S> {
     }
 }
 
-bubble_core::lazy_static! {
+dyntls::lazy_static! {
     static ref WSA_RECVMSG: OnceLock<LPFN_WSARECVMSG> = OnceLock::new();
 }
 
