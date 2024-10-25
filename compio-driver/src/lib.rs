@@ -391,7 +391,7 @@ impl<E: Extend<usize>> Extend<Entry> for OutEntries<'_, E> {
 
 #[derive(Debug, Clone)]
 enum ThreadPoolBuilder {
-    Create { limit: usize, recv_limit: Duration },
+    Create { limit: usize, recv_limit: Duration, on_thread_start: Option<CallBack> },
     Reuse(AsyncifyPool),
 }
 
@@ -406,12 +406,13 @@ impl ThreadPoolBuilder {
         Self::Create {
             limit: 256,
             recv_limit: Duration::from_secs(60),
+            on_thread_start: None,
         }
     }
 
     pub fn create_or_reuse(&self) -> AsyncifyPool {
         match self {
-            Self::Create { limit, recv_limit } => AsyncifyPool::new(*limit, *recv_limit),
+            Self::Create { limit, recv_limit, on_thread_start } => AsyncifyPool::new(*limit, *recv_limit, on_thread_start.clone()),
             Self::Reuse(pool) => pool.clone(),
         }
     }
@@ -466,6 +467,14 @@ impl ProactorBuilder {
     pub fn thread_pool_recv_timeout(&mut self, timeout: Duration) -> &mut Self {
         if let ThreadPoolBuilder::Create { recv_limit, .. } = &mut self.pool_builder {
             *recv_limit = timeout;
+        }
+        self
+    }
+
+    /// Set the callback function that will be called when a thread starts.
+    pub fn on_thread_start(&mut self, f: std::sync::Arc<Box<dyn Fn() + Send + Sync + 'static>>) -> &mut Self {
+        if let ThreadPoolBuilder::Create { on_thread_start, .. } = &mut self.pool_builder {
+            *on_thread_start = Some(CallBack(f));
         }
         self
     }

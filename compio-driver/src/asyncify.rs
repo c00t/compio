@@ -67,13 +67,34 @@ fn worker(
     receiver: Receiver<BoxedDispatchable>,
     counter: Arc<AtomicUsize>,
     timeout: Duration,
+    on_thread_start: Option<CallBack>,
 ) -> impl FnOnce() {
     move || {
+        if let Some(callback) = on_thread_start {
+            callback.0();
+        }
         counter.fetch_add(1, Ordering::AcqRel);
         let _guard = CounterGuard(counter);
         while let Ok(f) = receiver.recv_timeout(timeout) {
             f.run();
         }
+    }
+}
+
+/// A callback function that will be called when a thread starts or ends.
+#[repr(transparent)]
+#[derive(Clone)]
+pub struct CallBack(pub std::sync::Arc<Box<dyn Fn() + Send + Sync + 'static>>);
+
+impl fmt::Debug for CallBack {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        "CallBack(..)".fmt(f)
+    }
+}
+
+impl fmt::Display for CallBack {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        "CallBack(..)".fmt(f)
     }
 }
 
@@ -85,12 +106,13 @@ pub struct AsyncifyPool {
     counter: Arc<AtomicUsize>,
     thread_limit: usize,
     recv_timeout: Duration,
+    on_thread_start: Option<CallBack>,
 }
 
 impl AsyncifyPool {
     /// Create [`AsyncifyPool`] with thread number limit and channel receive
     /// timeout.
-    pub fn new(thread_limit: usize, recv_timeout: Duration) -> Self {
+    pub fn new(thread_limit: usize, recv_timeout: Duration, on_thread_start: Option<CallBack>) -> Self {
         let (sender, receiver) = bounded(0);
         Self {
             sender,
@@ -98,6 +120,7 @@ impl AsyncifyPool {
             counter: Arc::new(AtomicUsize::new(0)),
             thread_limit,
             recv_timeout,
+            on_thread_start,
         }
     }
 
@@ -120,6 +143,7 @@ impl AsyncifyPool {
                             self.receiver.clone(),
                             self.counter.clone(),
                             self.recv_timeout,
+                            self.on_thread_start.clone(),
                         ));
                         self.sender.send(f).expect("the channel should not be full");
                         Ok(())

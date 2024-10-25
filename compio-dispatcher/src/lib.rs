@@ -103,7 +103,11 @@ impl Dispatcher {
                         (None,thread_builder)
                     };
 
+                    let start_callback = builder.on_thread_start.clone();
                     thread_builder.spawn(move || {
+                        if let Some(callback) = start_callback {
+                            callback();
+                        }
                         Runtime::builder()
                             .name(thread_name)
                             .with_proactor(proactor_builder)
@@ -222,6 +226,11 @@ impl Dispatcher {
         }
         Ok(())
     }
+
+    /// Get the number of worker threads in the task system dispatcher.
+    pub fn num_threads(&self) -> usize {
+        self.threads.len()
+    }
 }
 
 /// A builder for [`Dispatcher`].
@@ -231,6 +240,7 @@ pub struct DispatcherBuilder {
     stack_size: Option<usize>,
     names: Option<Box<dyn FnMut(usize) -> String>>,
     proactor_builder: ProactorBuilder,
+    on_thread_start: Option<std::sync::Arc<Box<dyn Fn() + Send + Sync + 'static>>>,
 }
 
 impl DispatcherBuilder {
@@ -242,6 +252,7 @@ impl DispatcherBuilder {
             stack_size: None,
             names: None,
             proactor_builder: ProactorBuilder::new(),
+            on_thread_start: None,
         }
     }
 
@@ -277,6 +288,14 @@ impl DispatcherBuilder {
     /// Set the proactor builder for the inner runtimes.
     pub fn proactor_builder(mut self, builder: ProactorBuilder) -> Self {
         self.proactor_builder = builder;
+        self
+    }
+
+    /// Set a callback function that will be called when a thread starts.
+    pub fn on_thread_start(mut self, f: impl Fn() + Send + Sync + 'static) -> Self {
+        let f: Arc<Box<dyn Fn() + Send + Sync + 'static>> = std::sync::Arc::new(Box::new(f));
+        self.proactor_builder.on_thread_start(f.clone());
+        self.on_thread_start = Some(f);
         self
     }
 
