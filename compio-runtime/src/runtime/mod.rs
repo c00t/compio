@@ -126,6 +126,11 @@ impl Runtime {
         }
     }
 
+    /// Is it inside a runtime?
+    pub fn in_runtime(&self) -> bool {
+        CURRENT_RUNTIME.is_set()
+    }
+
     /// Spawns a new asynchronous task, returning a [`Task`] for it.
     ///
     /// # Safety
