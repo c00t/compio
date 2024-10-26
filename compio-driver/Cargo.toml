@@ -1,6 +1,6 @@
 [package]
 name = "compio-driver"
-version = "0.5.0"
+version = "0.5.1"
 description = "Low-level driver for compio"
 categories = ["asynchronous"]
 keywords = ["async", "iocp", "io-uring"]
@@ -60,13 +60,11 @@ windows-sys = { workspace = true, features = [
 [target.'cfg(target_os = "linux")'.dependencies]
 io-uring = { version = "0.7.0", optional = true }
 polling = { version = "3.3.0", optional = true }
-os_pipe = { workspace = true, optional = true }
 paste = { workspace = true }
 
 # Other platform dependencies
 [target.'cfg(all(not(target_os = "linux"), unix))'.dependencies]
 polling = "3.3.0"
-os_pipe = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 crossbeam-channel = { workspace = true }
@@ -78,7 +76,7 @@ compio-buf = { workspace = true, features = ["arrayvec"] }
 
 [features]
 default = ["io-uring"]
-polling = ["dep:polling", "dep:os_pipe"]
+polling = ["dep:polling"]
 
 io-uring-sqe128 = []
 io-uring-cqe32 = []
