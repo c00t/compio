@@ -43,6 +43,7 @@ once_cell = { workspace = true }
 slab = { workspace = true, optional = true }
 smallvec = "1.11.1"
 socket2 = { workspace = true }
+bubble-core = { workspace = true }
 
 # Windows specific dependencies
 [target.'cfg(windows)'.dependencies]

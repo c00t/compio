@@ -13,14 +13,16 @@ use std::{
     thread::{self, ThreadId},
 };
 
+use bubble_core::os::thread::SysThreadId;
+
 dyntls::thread_local! {
-    static THREAD_ID: Cell<ThreadId> = Cell::new(thread::current().id());
+    static THREAD_ID: Cell<SysThreadId> = Cell::new(SysThreadId::current());
 }
 
 /// A wrapper that copied from `send_wrapper` crate, with our own optimizations.
 pub struct SendWrapper<T> {
     data: ManuallyDrop<T>,
-    thread_id: ThreadId,
+    thread_id: SysThreadId,
 }
 
 impl<T> SendWrapper<T> {

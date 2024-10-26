@@ -39,6 +39,7 @@ compio-tls = { path = "./compio-tls", version = "0.3.0", default-features = fals
 compio-process = { path = "./compio-process", version = "0.2.0" }
 compio-quic = { path = "./compio-quic", version = "0.1.0" }
 dyntls = { path = "../../../app/dyntls" }
+bubble-core = { path = "../../../app/bubble_core" }
 
 bytes = "1.7.1"
 flume = "0.11.0"
