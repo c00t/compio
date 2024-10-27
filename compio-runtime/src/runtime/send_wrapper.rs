@@ -16,7 +16,7 @@ use std::{
 use bubble_core::os::thread::SysThreadId;
 
 dyntls::thread_local! {
-    static THREAD_ID: Cell<SysThreadId> = Cell::new(SysThreadId::current());
+    static THREAD_ID: Cell<SysThreadId> = Cell::new(SysThreadId::current_uncached());
 }
 
 /// A wrapper that copied from `send_wrapper` crate, with our own optimizations.
