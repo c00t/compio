@@ -88,11 +88,14 @@ macro_rules! syscall {
 #[doc(hidden)]
 macro_rules! syscall {
     (break $e:expr) => {
-        match $crate::syscall!($e) {
-            Ok(fd) => ::std::task::Poll::Ready(Ok(fd as usize)),
-            Err(e) if e.kind() == ::std::io::ErrorKind::WouldBlock || e.raw_os_error() == Some(::libc::EINPROGRESS)
-                   => ::std::task::Poll::Pending,
-            Err(e) => ::std::task::Poll::Ready(Err(e)),
+        loop {
+            match $crate::syscall!($e) {
+                Ok(fd) => break ::std::task::Poll::Ready(Ok(fd as usize)),
+                Err(e) if e.kind() == ::std::io::ErrorKind::WouldBlock || e.raw_os_error() == Some(::libc::EINPROGRESS)
+                    => break ::std::task::Poll::Pending,
+                Err(e) if e.kind() == ::std::io::ErrorKind::Interrupted => {},
+                Err(e) => break ::std::task::Poll::Ready(Err(e)),
+            }
         }
     };
     ($e:expr, $f:ident($fd:expr)) => {
@@ -256,7 +259,8 @@ impl Proactor {
             // SAFETY: completed.
             Some(unsafe { op.into_inner() })
         } else {
-            self.driver.cancel(op);
+            self.driver
+                .cancel(&mut unsafe { Key::<dyn OpCode>::new_unchecked(op.user_data()) });
             None
         }
     }
@@ -265,7 +269,10 @@ impl Proactor {
     /// user-defined data, associated with it.
     pub fn push<T: OpCode + 'static>(&mut self, op: T) -> PushEntry<Key<T>, BufResult<usize, T>> {
         let mut op = self.driver.create_op(op);
-        match self.driver.push(&mut op) {
+        match self
+            .driver
+            .push(&mut unsafe { Key::<dyn OpCode>::new_unchecked(op.user_data()) })
+        {
             Poll::Pending => PushEntry::Pending(op),
             Poll::Ready(res) => {
                 op.set_result(res);
@@ -278,15 +285,8 @@ impl Proactor {
     /// Poll the driver and get completed entries.
     /// You need to call [`Proactor::pop`] to get the pushed
     /// operations.
-    pub fn poll(
-        &mut self,
-        timeout: Option<Duration>,
-        entries: &mut impl Extend<usize>,
-    ) -> io::Result<()> {
-        unsafe {
-            self.driver.poll(timeout, OutEntries::new(entries))?;
-        }
-        Ok(())
+    pub fn poll(&mut self, timeout: Option<Duration>) -> io::Result<()> {
+        unsafe { self.driver.poll(timeout) }
     }
 
     /// Get the pushed operations from the completion entries.
@@ -358,34 +358,16 @@ impl Entry {
     pub fn into_result(self) -> io::Result<usize> {
         self.result
     }
-}
 
-// The output entries need to be marked as `completed`. If an entry has been
-// marked as `cancelled`, it will be removed from the registry.
-struct OutEntries<'b, E> {
-    entries: &'b mut E,
-}
-
-impl<'b, E> OutEntries<'b, E> {
-    pub fn new(entries: &'b mut E) -> Self {
-        Self { entries }
-    }
-}
-
-impl<E: Extend<usize>> Extend<Entry> for OutEntries<'_, E> {
-    fn extend<T: IntoIterator<Item = Entry>>(&mut self, iter: T) {
-        self.entries.extend(iter.into_iter().filter_map(|e| {
-            let user_data = e.user_data();
-            let mut op = unsafe { Key::<()>::new_unchecked(user_data) };
-            op.set_flags(e.flags());
-            if op.set_result(e.into_result()) {
-                // SAFETY: completed and cancelled.
-                let _ = unsafe { op.into_box() };
-                None
-            } else {
-                Some(user_data)
-            }
-        }))
+    /// SAFETY: `user_data` should be a valid pointer.
+    pub unsafe fn notify(self) {
+        let user_data = self.user_data();
+        let mut op = Key::<()>::new_unchecked(user_data);
+        op.set_flags(self.flags());
+        if op.set_result(self.into_result()) {
+            // SAFETY: completed and cancelled.
+            let _ = op.into_box();
+        }
     }
 }
 

@@ -15,12 +15,11 @@ use std::{
 use async_task::{Runnable, Task};
 use compio_buf::IntoInner;
 use compio_driver::{
-    AsRawFd, Key, OpCode, Proactor, ProactorBuilder, PushEntry, RawFd, op::Asyncify,
+    AsRawFd, Key, NotifyHandle, OpCode, Proactor, ProactorBuilder, PushEntry, RawFd, op::Asyncify,
 };
 use compio_log::{debug, instrument};
 use crossbeam_queue::SegQueue;
 use futures_util::{FutureExt, future::Either};
-use smallvec::SmallVec;
 
 pub(crate) mod op;
 #[cfg(feature = "time")]
@@ -31,7 +30,7 @@ use send_wrapper::SendWrapper;
 
 #[cfg(feature = "time")]
 use crate::runtime::time::{TimerFuture, TimerRuntime};
-use crate::{BufResult, runtime::op::OpFlagsFuture};
+use crate::{BufResult, runtime::op::OpFuture};
 
 dyntls::scoped_thread_local!(static CURRENT_RUNTIME: Runtime);
 
@@ -39,13 +38,57 @@ dyntls::scoped_thread_local!(static CURRENT_RUNTIME: Runtime);
 /// `Err` when the spawned future panicked.
 pub type JoinHandle<T> = Task<Result<T, Box<dyn Any + Send>>>;
 
+struct RunnableQueue {
+    local_runnables: SendWrapper<RefCell<VecDeque<Runnable>>>,
+    sync_runnables: SegQueue<Runnable>,
+}
+
+impl RunnableQueue {
+    pub fn new() -> Self {
+        Self {
+            local_runnables: SendWrapper::new(RefCell::new(VecDeque::new())),
+            sync_runnables: SegQueue::new(),
+        }
+    }
+
+    pub fn schedule(&self, runnable: Runnable, handle: &NotifyHandle) {
+        if let Some(runnables) = self.local_runnables.get() {
+            runnables.borrow_mut().push_back(runnable);
+        } else {
+            self.sync_runnables.push(runnable);
+            handle.notify().ok();
+        }
+    }
+
+    /// SAFETY: call in the main thread
+    pub unsafe fn run(&self, event_interval: usize) -> bool {
+        let local_runnables = self.local_runnables.get_unchecked();
+        for _i in 0..event_interval {
+            let next_task = local_runnables.borrow_mut().pop_front();
+            let has_local_task = next_task.is_some();
+            if let Some(task) = next_task {
+                task.run();
+            }
+            // Cheaper than pop.
+            let has_sync_task = !self.sync_runnables.is_empty();
+            if has_sync_task {
+                if let Some(task) = self.sync_runnables.pop() {
+                    task.run();
+                }
+            } else if !has_local_task {
+                break;
+            }
+        }
+        !(local_runnables.borrow_mut().is_empty() && self.sync_runnables.is_empty())
+    }
+}
+
 /// The async runtime of compio. It is a thread local runtime, and cannot be
 /// sent to other threads.
 pub struct Runtime {
     name: String,
     driver: RefCell<Proactor>,
-    local_runnables: Arc<SendWrapper<RefCell<VecDeque<Runnable>>>>,
-    sync_runnables: Arc<SegQueue<Runnable>>,
+    runnables: Arc<RunnableQueue>,
     #[cfg(feature = "time")]
     timer_runtime: RefCell<TimerRuntime>,
     event_interval: usize,
@@ -69,8 +112,7 @@ impl Runtime {
         Ok(Self {
             name: builder.name.clone(),
             driver: RefCell::new(builder.proactor_builder.build()?),
-            local_runnables: Arc::new(SendWrapper::new(RefCell::new(VecDeque::new()))),
-            sync_runnables: Arc::new(SegQueue::new()),
+            runnables: Arc::new(RunnableQueue::new()),
             #[cfg(feature = "time")]
             timer_runtime: RefCell::new(TimerRuntime::new()),
             event_interval: builder.event_interval,
@@ -137,20 +179,14 @@ impl Runtime {
     ///
     /// The caller should ensure the captured lifetime long enough.
     pub unsafe fn spawn_unchecked<F: Future>(&self, future: F) -> Task<F::Output> {
-        let local_runnables = self.local_runnables.clone();
-        let sync_runnables = self.sync_runnables.clone();
+        let runnables = self.runnables.clone();
         let handle = self
             .driver
             .borrow()
             .handle()
             .expect("cannot create notify handle of the proactor");
         let schedule = move |runnable| {
-            if let Some(runnables) = local_runnables.get() {
-                runnables.borrow_mut().push_back(runnable);
-            } else {
-                sync_runnables.push(runnable);
-                handle.notify().ok();
-            }
+            runnables.schedule(runnable, &handle);
         };
         let (runnable, task) = async_task::spawn_unchecked(future, schedule);
         runnable.schedule();
@@ -164,24 +200,7 @@ impl Runtime {
     /// The return value indicates whether there are still tasks in the queue.
     pub fn run(&self) -> bool {
         // SAFETY: self is !Send + !Sync.
-        let local_runnables = unsafe { self.local_runnables.get_unchecked() };
-        for _i in 0..self.event_interval {
-            let next_task = local_runnables.borrow_mut().pop_front();
-            let has_local_task = next_task.is_some();
-            if let Some(task) = next_task {
-                task.run();
-            }
-            // Cheaper than pop.
-            let has_sync_task = !self.sync_runnables.is_empty();
-            if has_sync_task {
-                if let Some(task) = self.sync_runnables.pop() {
-                    task.run();
-                }
-            } else if !has_local_task {
-                break;
-            }
-        }
-        !(local_runnables.borrow_mut().is_empty() && self.sync_runnables.is_empty())
+        unsafe { self.runnables.run(self.event_interval) }
     }
 
     /// Block on the future till it completes.
@@ -279,7 +298,7 @@ impl Runtime {
         op: T,
     ) -> impl Future<Output = (BufResult<usize, T>, u32)> {
         match self.submit_raw(op) {
-            PushEntry::Pending(user_data) => Either::Left(OpFlagsFuture::new(user_data)),
+            PushEntry::Pending(user_data) => Either::Left(OpFuture::new(user_data)),
             PushEntry::Ready(res) => {
                 // submit_flags won't be ready immediately, if ready, it must be error without
                 // flags
@@ -362,21 +381,29 @@ impl Runtime {
     pub fn poll_with(&self, timeout: Option<Duration>) {
         instrument!(compio_log::Level::DEBUG, "poll_with");
 
-        let mut entries = SmallVec::<[usize; 1024]>::new();
         let mut driver = self.driver.borrow_mut();
-        match driver.poll(timeout, &mut entries) {
-            Ok(_) => {
-                debug!("poll driver ok, entries: {}", entries.len());
-            }
+        match driver.poll(timeout) {
+            Ok(()) => {}
             Err(e) => match e.kind() {
                 io::ErrorKind::TimedOut | io::ErrorKind::Interrupted => {
                     debug!("expected error: {e}");
                 }
-                _ => panic!("{:?}", e),
+                _ => panic!("{e:?}"),
             },
         }
         #[cfg(feature = "time")]
         self.timer_runtime.borrow_mut().wake();
+    }
+}
+
+impl Drop for Runtime {
+    fn drop(&mut self) {
+        self.enter(|| {
+            while self.runnables.sync_runnables.pop().is_some() {}
+            let local_runnables = unsafe { self.runnables.local_runnables.get_unchecked() };
+            let mut local_runnables = local_runnables.borrow_mut();
+            while local_runnables.pop_front().is_some() {}
+        })
     }
 }
 

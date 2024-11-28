@@ -12,10 +12,10 @@ use std::{io, task::Poll, time::Duration};
 
 pub use iour::{OpCode as IourOpCode, OpEntry};
 pub(crate) use iour::{sockaddr_storage, socklen_t};
-pub use poll::{Decision, OpCode as PollOpCode};
+pub use poll::{Decision, OpCode as PollOpCode, OpType};
 
 pub use crate::driver_type::DriverType; // Re-export so current user won't be broken
-use crate::{Key, OutEntries, ProactorBuilder};
+use crate::{Key, ProactorBuilder};
 
 /// Fused [`OpCode`]
 ///
@@ -63,28 +63,24 @@ impl Driver {
         }
     }
 
-    pub fn cancel<T>(&mut self, op: Key<T>) {
+    pub fn cancel(&mut self, op: &mut Key<dyn OpCode>) {
         match &mut self.fuse {
             FuseDriver::Poll(driver) => driver.cancel(op),
             FuseDriver::IoUring(driver) => driver.cancel(op),
         }
     }
 
-    pub fn push<T: OpCode + 'static>(&mut self, op: &mut Key<T>) -> Poll<io::Result<usize>> {
+    pub fn push(&mut self, op: &mut Key<dyn OpCode>) -> Poll<io::Result<usize>> {
         match &mut self.fuse {
             FuseDriver::Poll(driver) => driver.push(op),
             FuseDriver::IoUring(driver) => driver.push(op),
         }
     }
 
-    pub unsafe fn poll(
-        &mut self,
-        timeout: Option<Duration>,
-        entries: OutEntries<impl Extend<usize>>,
-    ) -> io::Result<()> {
+    pub unsafe fn poll(&mut self, timeout: Option<Duration>) -> io::Result<()> {
         match &mut self.fuse {
-            FuseDriver::Poll(driver) => driver.poll(timeout, entries),
-            FuseDriver::IoUring(driver) => driver.poll(timeout, entries),
+            FuseDriver::Poll(driver) => driver.poll(timeout),
+            FuseDriver::IoUring(driver) => driver.poll(timeout),
         }
     }
 

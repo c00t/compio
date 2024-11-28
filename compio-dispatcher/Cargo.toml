@@ -1,6 +1,6 @@
 [package]
 name = "compio-dispatcher"
-version = "0.4.0"
+version = "0.5.0"
 description = "Multithreading dispatcher for compio"
 categories = ["asynchronous"]
 keywords = ["async", "runtime"]
@@ -9,6 +9,10 @@ authors = { workspace = true }
 readme = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 # Workspace dependencies
@@ -25,3 +29,7 @@ compio-net = { workspace = true }
 compio-macros = { workspace = true }
 
 futures-util = { workspace = true }
+
+[features]
+io-uring = ["compio-runtime/io-uring"]
+polling = ["compio-runtime/polling"]

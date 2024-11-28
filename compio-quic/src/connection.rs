@@ -1,6 +1,5 @@
 use std::{
     collections::VecDeque,
-    io,
     net::{IpAddr, SocketAddr},
     pin::{Pin, pin},
     sync::{Arc, Mutex, MutexGuard},
@@ -17,9 +16,11 @@ use futures_util::{
     future::{self, Fuse, FusedFuture, LocalBoxFuture},
     select, stream,
 };
+#[cfg(rustls)]
+use quinn_proto::crypto::rustls::HandshakeData;
 use quinn_proto::{
     ConnectionHandle, ConnectionStats, Dir, EndpointEvent, StreamEvent, StreamId, VarInt,
-    congestion::Controller, crypto::rustls::HandshakeData,
+    congestion::Controller,
 };
 use rustc_hash::FxHashMap as HashMap;
 use thiserror::Error;
@@ -86,6 +87,7 @@ impl ConnectionState {
         }
     }
 
+    #[cfg(rustls)]
     fn handshake_data(&self) -> Option<Box<HandshakeData>> {
         self.conn
             .crypto_session()
@@ -170,7 +172,7 @@ impl ConnectionInner {
         }
     }
 
-    async fn run(self: &Arc<Self>) -> io::Result<()> {
+    async fn run(&self) {
         let mut poller = stream::poll_fn(|cx| {
             let mut state = self.state();
             let ready = state.poller.is_none();
@@ -210,13 +212,14 @@ impl ConnectionInner {
                     }
                     state
                 },
-                BufResult::<(), Vec<u8>>(res, mut buf) = transmit_fut => match res {
-                    Ok(()) => {
-                        buf.clear();
-                        send_buf = Some(buf);
-                        self.state()
-                    },
-                    Err(e) => break Err(e),
+                BufResult::<(), Vec<u8>>(res, mut buf) = transmit_fut => {
+                    #[allow(unused)]
+                    if let Err(e) = res {
+                        error!("I/O error: {}", e);
+                    }
+                    buf.clear();
+                    send_buf = Some(buf);
+                    self.state()
                 },
             };
 
@@ -279,7 +282,7 @@ impl ConnectionInner {
             }
 
             if state.conn.is_drained() {
-                break Ok(());
+                break;
             }
         }
     }
@@ -380,19 +383,14 @@ impl Connecting {
         ));
         let worker = compio_runtime::spawn({
             let inner = inner.clone();
-            async move {
-                #[allow(unused)]
-                if let Err(e) = inner.run().await {
-                    error!("I/O error: {}", e);
-                }
-            }
-            .in_current_span()
+            async move { inner.run().await }.in_current_span()
         });
         inner.state().worker = Some(worker);
         Self(inner)
     }
 
     /// Parameters negotiated during the handshake.
+    #[cfg(rustls)]
     pub async fn handshake_data(&mut self) -> Result<Box<HandshakeData>, ConnectionError> {
         future::poll_fn(|cx| {
             let mut state = self.0.try_state()?;
@@ -503,6 +501,7 @@ impl Connection {
     conn_fn!();
 
     /// Parameters negotiated during the handshake.
+    #[cfg(rustls)]
     pub fn handshake_data(&mut self) -> Result<Box<HandshakeData>, ConnectionError> {
         Ok(self.0.try_state()?.handshake_data().unwrap())
     }

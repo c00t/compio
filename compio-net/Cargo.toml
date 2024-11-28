@@ -1,6 +1,6 @@
 [package]
 name = "compio-net"
-version = "0.5.1"
+version = "0.6.0"
 description = "Networking IO for compio"
 categories = ["asynchronous", "network-programming"]
 keywords = ["async", "net"]
@@ -23,6 +23,7 @@ compio-runtime = { workspace = true, features = ["event"] }
 
 cfg-if = { workspace = true }
 either = "1.9.0"
+once_cell = { workspace = true }
 socket2 = { workspace = true, features = ["all"] }
 
 [target.'cfg(windows)'.dependencies]
@@ -43,5 +44,9 @@ futures-util = { workspace = true }
 tempfile = { workspace = true }
 
 [features]
-default = []
-io-uring = ["compio-driver/io-uring"]
+io-uring = ["compio-runtime/io-uring"]
+polling = ["compio-runtime/polling"]
+
+# Nightly features
+once_cell_try = []
+nightly = ["once_cell_try"]
