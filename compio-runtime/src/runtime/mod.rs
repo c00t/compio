@@ -308,13 +308,8 @@ impl Runtime {
     }
 
     #[cfg(feature = "time")]
-    pub(crate) fn create_timer(&self, delay: std::time::Duration) -> impl Future<Output = ()> {
-        let mut timer_runtime = self.timer_runtime.borrow_mut();
-        if let Some(key) = timer_runtime.insert(delay) {
-            Either::Left(TimerFuture::new(key))
-        } else {
-            Either::Right(std::future::ready(()))
-        }
+    pub(crate) fn create_timer(&self, instant: std::time::Instant) -> impl Future<Output = ()> {
+        TimerFuture::new(instant)
     }
 
     pub(crate) fn cancel_op<T: OpCode>(&self, op: Key<T>) {
@@ -337,6 +332,21 @@ impl Runtime {
             driver.update_waker(&mut k, cx.waker().clone());
             k
         })
+    }
+
+    #[cfg(feature = "time")]
+    pub(crate) fn register_timer(
+        &self,
+        cx: &mut Context,
+        instant: std::time::Instant,
+    ) -> Option<usize> {
+        let mut timer_runtime = self.timer_runtime.borrow_mut();
+        if let Some(key) = timer_runtime.insert(instant) {
+            timer_runtime.update_waker(key, cx.waker().clone());
+            Some(key)
+        } else {
+            None
+        }
     }
 
     #[cfg(feature = "time")]
@@ -401,8 +411,12 @@ impl Drop for Runtime {
         self.enter(|| {
             while self.runnables.sync_runnables.pop().is_some() {}
             let local_runnables = unsafe { self.runnables.local_runnables.get_unchecked() };
-            let mut local_runnables = local_runnables.borrow_mut();
-            while local_runnables.pop_front().is_some() {}
+            loop {
+                let runnable = local_runnables.borrow_mut().pop_front();
+                if runnable.is_none() {
+                    break;
+                }
+            }
         })
     }
 }
@@ -523,6 +537,9 @@ pub fn spawn_blocking<T: Send + 'static>(
 
 /// Submit an operation to the current runtime, and return a future for it.
 ///
+/// It is safe but unspecified behavior to send the returned future to another
+/// runtime and poll it.
+///
 /// ## Panics
 ///
 /// This method doesn't create runtime. It tries to obtain the current runtime
@@ -533,6 +550,9 @@ pub fn submit<T: OpCode + 'static>(op: T) -> impl Future<Output = BufResult<usiz
 
 /// Submit an operation to the current runtime, and return a future for it with
 /// flags.
+///
+/// It is safe but unspecified behavior to send the returned future to another
+/// runtime and poll it.
 ///
 /// ## Panics
 ///
