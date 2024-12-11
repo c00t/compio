@@ -11,6 +11,28 @@ use futures_util::{FutureExt, select};
 
 use crate::Runtime;
 
+use crate::runtime::time::TimerFuture;
+
+/// A future that sleeps for a given duration.
+pub struct Sleep(TimerFuture);
+
+/// Creates a future that sleeps for a given duration.
+pub fn sleep_future(dur: Duration) -> Sleep {
+    Sleep(TimerFuture::new(Instant::now() + dur))
+}
+
+impl Future for Sleep {
+    type Output = ();
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        // TODO: wrap the inner future
+        unsafe { std::pin::Pin::new_unchecked(&mut self.get_mut().0) }.poll(cx)
+    }
+}
+
 /// Waits until `duration` has elapsed.
 ///
 /// Equivalent to [`sleep_until(Instant::now() + duration)`](sleep_until). An
